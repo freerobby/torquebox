@@ -1,20 +1,20 @@
 # Copyright 2008-2012 Red Hat, Inc, and individual contributors.
-# 
+#
 # This is free software; you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as
 # published by the Free Software Foundation; either version 2.1 of
 # the License, or (at your option) any later version.
-# 
+#
 # This software is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public
 # License along with this software; if not, write to the Free
 # Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
 # 02110-1301 USA, or see the FSF site: http://www.fsf.org.
- 
+
 require 'torquebox/messaging/queue'
 require 'torquebox/messaging/future'
 require 'torquebox/messaging/task'
@@ -112,7 +112,7 @@ module TorqueBox
         end
 
         private
-        
+
         def __method_added(method)
           method = method.to_s
           if @__backgroundable_methods &&
@@ -149,9 +149,11 @@ module TorqueBox
           (singleton_method ? singleton : self).class_eval do
             define_method async_method do |*args|
               Util.publish_message(self, sync_method, args, options)
+            ensure
+              ActiveRecord::Base.clear_active_connections!
             end
           end
-          
+
           code = singleton_method ? "class << self" : ""
           code << %Q{
             alias_method :#{sync_method}, :#{method}
@@ -162,7 +164,7 @@ module TorqueBox
           } if privatize || protect
           code << "end" if singleton_method
 
-          class_eval code          
+          class_eval code
         ensure
           @__backgroundable_methods[method][:backgrounding] = nil
         end
@@ -184,7 +186,7 @@ module TorqueBox
 
       module Util
         extend TorqueBox::Injectors
-        
+
         class << self
           def publish_message(receiver, method, args, options = { })
             queue_name = Task.queue_name( "torquebox_backgroundable" )
@@ -196,7 +198,7 @@ module TorqueBox
                              :future_queue => queue_name,
                              :method => method,
                              :args => args}, options )
-            
+
             future
           rescue javax.jms.InvalidDestinationException => ex
             raise RuntimeError.new("The Backgroundable queue is not available. Did you disable it by setting its concurrency to 0?")
